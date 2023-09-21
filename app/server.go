@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-
 	"net"
 	"os"
 )
@@ -13,19 +12,24 @@ func main() {
 		fmt.Println("Failed to bind to port 4221")
 		os.Exit(1)
 	}
+	defer l.Close()
+	//fmt.Println("l: ", l)
+	for {
+		connection, err := l.Accept()
+		if err != nil {
+			handleError(err)
+		}
 
-	connection, err := l.Accept()
-	if err != nil {
-		handleError(err)
+		var read []byte
+		_, err = connection.Read(read)
+		if err != nil {
+			handleError(err)
+		}
+
+		connection.Write([]byte(("HTTP/1.1 200 OK\r\n\r\n")))
+
+		connection.Close()
 	}
-	var read []byte
-	fmt.Println(connection)
-	connection.Read(read)
-
-	connection.Write([]byte(("HTTP/1.1 200 OK\r\n\r\n")))
-
-	connection.Close()
-
 }
 
 func handleError(err error) {
