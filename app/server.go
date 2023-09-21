@@ -26,7 +26,7 @@ func main() {
 			handleError(err)
 		}
 
-		connection.Write([]byte(("HTTP/1.1 200 OK\r\n\r\n")))
+		connection.Write([]byte(("GET /index.html HTTP/1.1 200 OK\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1\r\n")))
 
 		connection.Close()
 	}
