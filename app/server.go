@@ -19,6 +19,7 @@ func main() {
 		handleError(err)
 	}
 	var read []byte
+	fmt.Println(connection)
 	connection.Read(read)
 
 	connection.Write([]byte(("HTTP/1.1 200 OK\r\n\r\n")))
