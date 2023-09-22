@@ -20,36 +20,42 @@ func main() {
 		if err != nil {
 			handleError(err)
 		}
-		// process request
-		request := make([]byte, 1024)
-		_, err = connection.Read(request)
-		if err != nil {
-			handleError(err)
-		}
-		requestData := string(request)
-		fmt.Printf("Data: \n%s", requestData)
-		httpData := strings.Split(requestData, "\r\n")
-		for i, datum := range httpData {
-			fmt.Printf("i=%v -- Data: %v----\n", i, datum)
-		}
-
-		startLine := parseStartLine(httpData[0])
-
-		if startLine.Path == "/" {
-			connection.Write([]byte(("HTTP/1.1 200 OK\r\n\r\n")))
-		} else if strings.HasPrefix(startLine.Path, "/echo/") {
-			res := echoResponse(startLine.Path)
-			connection.Write([]byte((res)))
-		} else if strings.HasPrefix(startLine.Path, "/user-agent") {
-			res := userAgent(httpData)
-			connection.Write([]byte((res)))
-		} else {
-			connection.Write([]byte(("HTTP/1.1 404 NOT FOUND\r\n\r\n")))
-
-		}
-
-		connection.Close()
+		go handleConnection(err, connection)
 	}
+}
+
+func handleConnection(err error, connection net.Conn) {
+	if err != nil {
+		handleError(err)
+	}
+	// process request
+	request := make([]byte, 1024)
+	_, err = connection.Read(request)
+	if err != nil {
+		handleError(err)
+	}
+	requestData := string(request)
+	fmt.Printf("Data: \n%s", requestData)
+	httpData := strings.Split(requestData, "\r\n")
+	for i, datum := range httpData {
+		fmt.Printf("i=%v -- Data: %v----\n", i, datum)
+	}
+
+	startLine := parseStartLine(httpData[0])
+
+	if startLine.Path == "/" {
+		connection.Write([]byte(("HTTP/1.1 200 OK\r\n\r\n")))
+	} else if strings.HasPrefix(startLine.Path, "/echo/") {
+		res := echoResponse(startLine.Path)
+		connection.Write([]byte((res)))
+	} else if strings.HasPrefix(startLine.Path, "/user-agent") {
+		res := userAgent(httpData)
+		connection.Write([]byte((res)))
+	} else {
+		connection.Write([]byte(("HTTP/1.1 404 NOT FOUND\r\n\r\n")))
+	}
+
+	connection.Close()
 }
 
 func userAgent(httpData []string) string {
