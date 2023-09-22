@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -68,18 +70,18 @@ func handleConnection(err error, connection net.Conn) {
 func handleFiles(directory string, httpPath string) string {
 	filePath := strings.TrimPrefix(httpPath, "/files/")
 	filePathAbs := path.Join(directory, filePath)
-	fileContent, err := os.ReadFile(filePathAbs)
-	//file, err := os.OpenFile(filePathAbs, os.O_RDONLY, os.ModePerm)
+	//fileContent, err := os.ReadFile(filePathAbs)
+	file, err := os.OpenFile(filePathAbs, os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		fmt.Println("error occurred: ", err.Error())
 		return "HTTP/1.1 404 NOT FOUND\r\n\r\n"
 	}
-	//fileBuffer := bufio.NewReader(file)
-	//fileSize := fileBuffer.Size()
-	//fileContent := make([]byte, fileSize)
-	//_, err = io.ReadFull(fileBuffer, fileContent)
-	//handleErr(err)
-	return make200Response(string(fileContent), "application/octet-stream")
+	fileBuffer := bufio.NewReader(file)
+	fileSize := fileBuffer.Size()
+	fileContents := make([]byte, fileSize)
+	_, err = io.ReadFull(fileBuffer, fileContents)
+	handleError(err)
+	return make200Response(string(fileContents), "application/octet-stream")
 
 }
 
