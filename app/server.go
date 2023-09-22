@@ -3,11 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
-	"strings"
-
-	// Uncomment this block to pass the first stage
 	"net"
 	"os"
+	"strings"
 )
 
 var directory string = ""
