@@ -5,10 +5,14 @@ import (
 	"log"
 	"net"
 	"os"
+	"path"
 	"strings"
 )
 
 func main() {
+
+	fmt.Printf("Logs appear here: %v, %v\n", len(os.Args), os.Args)
+	fmt.Println(os.Args)
 	l, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
 		handleError(err)
@@ -51,11 +55,32 @@ func handleConnection(err error, connection net.Conn) {
 	} else if strings.HasPrefix(startLine.Path, "/user-agent") {
 		res := userAgent(httpData)
 		connection.Write([]byte((res)))
+	} else if strings.HasPrefix(startLine.Path, "/files/") {
+		var res = handleFiles(os.Args[2], startLine.Path)
+		connection.Write([]byte((res)))
 	} else {
 		connection.Write([]byte(("HTTP/1.1 404 NOT FOUND\r\n\r\n")))
 	}
 
 	connection.Close()
+}
+
+func handleFiles(directory string, httpPath string) string {
+	filePath := strings.TrimPrefix(httpPath, "/files/")
+	filePathAbs := path.Join(directory, filePath)
+	fileContent, err := os.ReadFile(filePathAbs)
+	//file, err := os.OpenFile(filePathAbs, os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		fmt.Println("error occurred: ", err.Error())
+		return "HTTP/1.1 404 NOT FOUND\r\n\r\n"
+	}
+	//fileBuffer := bufio.NewReader(file)
+	//fileSize := fileBuffer.Size()
+	//fileContent := make([]byte, fileSize)
+	//_, err = io.ReadFull(fileBuffer, fileContent)
+	//handleErr(err)
+	return make200Response(string(fileContent), "application/octet-stream")
+
 }
 
 func userAgent(httpData []string) string {
