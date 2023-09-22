@@ -3,137 +3,136 @@ package main
 import (
 	"fmt"
 	"log"
+	"strings"
+
+	// Uncomment this block to pass the first stage
 	"net"
 	"os"
-
-	"path"
-	"strings"
-	// Uncomment this block to pass the first stage
-	// "net"
-	// "os"
 )
 
+var directory string = ""
+
+func sendResponseAndCloseConnection(conn net.Conn, content string) {
+	conn.Write([]byte(content))
+	conn.Close()
+}
+func getContentLength(content string) string {
+	return fmt.Sprint(len(content))
+}
+func sendResponseWithContent(content string, conn net.Conn) {
+	response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + getContentLength(content) + "\r\n\r\n" + content
+	sendResponseAndCloseConnection(conn, response)
+}
+
+type ownHeader struct {
+	header string
+	value  string
+}
+
+func processHeaders(content string) []ownHeader {
+	requestBody := strings.Split(content, "\n")
+	var headers []ownHeader
+	for i := 1; i < len(requestBody); i++ {
+		currentHeader := strings.SplitN(requestBody[i], ":", 2)
+		if len(currentHeader) == 2 {
+			var value = currentHeader[1][1:]
+			value = value[:len(value)-1]
+			currentOwnHeader := ownHeader{header: currentHeader[0], value: value}
+			headers = append(headers, currentOwnHeader)
+		}
+	}
+	return headers
+}
+func sendFileResponseWithContent(fileContent []byte, conn net.Conn) {
+	response := []byte("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: " + fmt.Sprint(len(fileContent)) + "\r\n\r\n")
+	conn.Write(response)
+	conn.Write(fileContent)
+	conn.Close()
+
+}
+
+// var directory string
+//
+//	func getDirectoryPath() {
+//		curr := flag.String("directory", "", "Pass directory")
+//		flag.Parse()
+//		directory = *curr
+//		fmt.Println(directory)
+//	}
+func respondWithFile(fileName string, conn net.Conn) {
+	// directory := os.Args('')
+	// filepath := filepath.Join(directory + fileName)
+	fileContent, err := os.ReadFile(directory + fileName)
+	if err != nil {
+		log.Fatal(err)
+		conn.Write([]byte("HTTP/1.1 404\r\n\r\n"))
+		conn.Close()
+	}
+	sendFileResponseWithContent(fileContent, conn)
+
+}
+func processRequest(conn net.Conn) {
+	buff := make([]byte, 1024)
+	_, err := conn.Read(buff)
+	requestContent := strings.Split(string(buff[:]), " ")
+	headers := processHeaders(string(buff[:]))
+	if requestContent[0] == "GET" && len(requestContent[1]) > 6 && requestContent[1][:7] == "/files/" {
+		fileName := requestContent[1][7:]
+		respondWithFile(fileName, conn)
+		return
+
+	}
+	if requestContent[0] == "GET" && requestContent[1] == "/user-agent" {
+		for i := 0; i < len(headers); i++ {
+			if headers[i].header == "User-Agent" {
+				sendResponseWithContent(headers[i].value, conn)
+				return
+			}
+		}
+		for i := 0; i < len(requestContent); i++ {
+			currentString := strings.Split(requestContent[i], " ")
+			for j := 0; j < len(currentString); j++ {
+				if currentString[j] == "User-Agent:a" {
+					sendResponseWithContent(currentString[j], conn)
+					return
+				}
+			}
+		}
+	}
+	if requestContent[0] == "GET" && strings.Split(requestContent[1], "/")[1] == "echo" {
+		echoResponse := requestContent[1][6:]
+		sendResponseWithContent(echoResponse, conn)
+		return
+	}
+	if requestContent[0] != "GET" || requestContent[1] != "/" {
+		sendResponseAndCloseConnection(conn, "HTTP/1.1 404\r\n\r\n")
+		return
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+	sendResponseAndCloseConnection(conn, "HTTP/1.1 200 OK\r\n\r\n")
+}
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
-	fmt.Println("Logs from your program will appear here!")
-	fmt.Printf("Logs from your program will appear here! %v, %v\n", len(os.Args), os.Args)
-
-	fmt.Println(os.Args)
 	// Uncomment this block to pass the first stage
+	fmt.Println("PATHS", os.Args)
+	if len(os.Args) > 1 && os.Args[1] == "--directory" {
+		directory = os.Args[2]
+		fmt.Println("directory", directory)
+
+	}
+	// getDirectoryPath()
 	l, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
-		fmt.Println("Failed to bind to port 4221")
+		fmt.Println("Failed to bind to port :4221")
 		os.Exit(1)
 	}
 	for {
-		connection, err := l.Accept()
+		conn, err := l.Accept()
 		if err != nil {
-			fmt.Println("Error accepting connection: ", err.Error())
-			os.Exit(1)
+			log.Fatal(err)
 		}
-		go handleConnection(err, connection)
-	}
-}
-func handleConnection(err error, connection net.Conn) {
-	if err != nil {
-		handleErr(err)
-	}
-	// process request
-	request := make([]byte, 1024)
-	_, err = connection.Read(request)
-	if err != nil {
-		handleErr(err)
-	}
-	requestData := string(request)
-	fmt.Printf("Data: \n%s", requestData)
-	httpData := strings.Split(requestData, "\r\n")
-	for i, datum := range httpData {
-		fmt.Printf("i=%v -- Data: %v----\n", i, datum)
-	}
-	startLine := parseStartLine(httpData[0])
-	if startLine.Path == "/" {
-		connection.Write([]byte(("HTTP/1.1 200 OK\r\n\r\n")))
-	} else if strings.HasPrefix(startLine.Path, "/echo/") {
-		res := echoResponse(startLine.Path)
-		connection.Write([]byte((res)))
-	} else if strings.HasPrefix(startLine.Path, "/user-agent") {
-		res := userAgent(httpData)
-		connection.Write([]byte((res)))
-	} else if strings.HasPrefix(startLine.Path, "/files/") {
-		var res = handleFiles(os.Args[2], startLine.Path)
-
-		connection.Write([]byte((res)))
-	} else {
-		connection.Write([]byte(("HTTP/1.1 404 NOT FOUND\r\n\r\n")))
-	}
-	connection.Close()
-}
-func handleFiles(directory string, httpPath string) string {
-	filePath := strings.TrimPrefix(httpPath, "/files/")
-	filePathAbs := path.Join(directory, filePath)
-	fileContent, err := os.ReadFile(filePathAbs)
-	//file, err := os.OpenFile(filePathAbs, os.O_RDONLY, os.ModePerm)
-	if err != nil {
-		fmt.Println("error occurred: ", err.Error())
-		return "HTTP/1.1 404 NOT FOUND\r\n\r\n"
-	}
-	//fileBuffer := bufio.NewReader(file)
-	//fileSize := fileBuffer.Size()
-	//fileContent := make([]byte, fileSize)
-	//_, err = io.ReadFull(fileBuffer, fileContent)
-	//handleErr(err)
-	return make200Response(string(fileContent), "application/octet-stream")
-
-}
-func userAgent(httpData []string) string {
-	// skip 0 - it is start line
-	for i := 1; i < len(httpData); i++ {
-		if ok := strings.HasPrefix(httpData[i], "User-Agent:"); ok {
-			return make200Response(strings.TrimPrefix(httpData[i], "User-Agent: "), "text/plain")
-		}
-	}
-	return ""
-}
-func echoResponse(path string) string {
-	content := strings.TrimPrefix(path, "/echo/")
-	return make200Response(content, "text/plain")
-}
-func make200Response(content string, contentType string) string {
-	response := make([]string, 5)
-	response[0] = "HTTP/1.1 200 OK"
-	response[1] = fmt.Sprintf("Content-Type: %s", contentType)
-	response[2] = fmt.Sprintf("Content-Length: %d", len(content))
-	response[3] = CONTENT_SEPARATOR
-	response[4] = content
-	return strings.Join(response, LINE_SEPARATOR)
-}
-func parseStartLine(line string) StartLine {
-	items := strings.Split(line, " ")
-	if len(items) != 3 {
-		log.Fatal("Expect 'HTTP_METHOD<space>PATH<space>HTTP_VERSION'")
-	}
-	return StartLine{
-		HttpMethod:  items[0],
-		Path:        items[1],
-		HttpVersion: items[2],
-	}
-}
-
-type StartLine struct {
-	HttpMethod  string
-	Path        string
-	HttpVersion string
-}
-
-//goland:noinspection GoSnakeCaseUsage
-const LINE_SEPARATOR = "\r\n"
-
-//goland:noinspection GoSnakeCaseUsage
-const CONTENT_SEPARATOR = ""
-
-func handleErr(err error) {
-	if err != nil {
-		fmt.Println("error occurred: ", err.Error())
-		os.Exit(1)
+		go processRequest(conn)
 	}
 }
